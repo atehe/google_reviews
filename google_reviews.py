@@ -11,13 +11,14 @@ from seleniumwire import webdriver
 import pandas as pd
 from selenium.webdriver.chrome.service import Service
 from urllib.parse import quote
-
-# from selenium_stealth import stealth
 import datetime
 import pandas as pd
+import requests
 
 
-DRIVER_EXECUTABLE_PATH = "./utils/chromedriver.exe"
+NUM_PAGES = 2
+DRIVER_EXECUTABLE_PATH = "./utils/chromedriver"
+os.makedirs("reviews_response", exist_ok=True)
 
 
 def click(element, driver):
@@ -28,340 +29,332 @@ def click(element, driver):
         driver.execute_script("arguments[0].click();", element)
 
 
+def parse_reviews(url, num_pages=3):
+    """Extract and clean reviews from maps backend api"""
+    url_split = url.split("!2m2!1i")
+    review_data = []
+    for review in range(num_pages):
+
+        page_url = f'{url_split[0]}{"!2m2!1i"}{review}{url_split[-1]}'
+        response = requests.get(page_url)
+
+        # cleaning up and making response parseable
+        response_text = response.text[5:]
+        response_text = json.loads(response_text)
+
+        reviews = response_text[2]
+
+        page_review_dict = {"url": page_url, "reviews": []}
+        for review in reviews:
+            page_review_dict["reviews"].append(review)
+
+        review_data.append(page_review_dict)
+
+    return review_data
+
+
 def map_search(query):
-    # search_box = WebDriverWait(driver, 30).until(
-    #     EC.element_to_be_clickable((By.XPATH, '//input[@id="searchboxinput"]'))
-    # )
-    # search_box.clear()
-    # search_box.send_keys(query)
-    # print(f"Searching {query}...")
+    print(f">>> Getting reviews for {query}")
     query_encoded = "+".join(query.split())
-    print(query_encoded)
+
     driver.get(f"https://www.google.com/maps/place/{query_encoded}")
     search_button = WebDriverWait(driver, 10).until(
         EC.element_to_be_clickable((By.XPATH, '//button[@id="searchbox-searchbutton"]'))
     )
     click(search_button, driver)
-    time.sleep(10)
 
 
-def parse_search():
+def go_to_place_page():
     try:
-
-        WebDriverWait(driver, 5).until(
+        WebDriverWait(driver, 20).until(
             EC.element_to_be_clickable(
                 (By.XPATH, "//div[@role='feed']/div/div[@role='article']")
             )
         )
-
         search_result_items = driver.find_elements(
             by=By.XPATH, value="//div[@role='feed']/div/div[@role='article']"
         )
-        print("Selecting Vendor...")
+        print(">>> Moving to Vendor Page...")
         click(search_result_items[0], driver)
         time.sleep(5)
-        is_review = to_review_page()
-        return is_review
     except:
-        is_review = to_review_page()
-        return is_review
+        pass
 
 
-def to_review_page():
-    more_reviews = None
-    counter = 0
-    while not more_reviews:
-        try:
-            more_reviews = WebDriverWait(driver, 10).until(
-                EC.element_to_be_clickable(
-                    (
-                        By.XPATH,
-                        '//button[contains(@jsaction,"moreReviews")]',
-                    )
-                )
-            )
-            action = ActionChains(driver)
-            action.move_to_element(to_element=more_reviews)
-            action.perform()
-
-            print("Moving to review page")
-            click(more_reviews, driver)
-            return True
-        except:
-            print("Reviews not found")
-            return False
-
-
-def getReviews(url, tag, is_review=True):
-    if not is_review:
-        return [], None
-
-    noofdays = 10000000
-    script = """u = "{0}"
-    AddDays = -{0}
-    someDate = new Date()
-    result = someDate.setDate(someDate.getDate() + AddDays)
-    rangeD = new Date(result)
-    function sleep(ms) {
-          return new Promise(resolve => setTimeout(resolve, ms));
-       }
-    ur = u.split("!2m2!1i")
-    ur[0] = ur[0] + "!2m2!1i"
-    ur.splice(1, 0, "")
-    i = 0
-    responses = []
-    while (true) {
-        response = {}
-        if (i === 0) {
-            s = ""
-        } else {
-            s = i.toString()
-        }
-        sleep(150)
-        ur[1] = s
-        url = ur.join("")
-        data1 = await fetch(url)
-            .then(response => response.text())
-            .then(function(data){return JSON.parse(data.slice(5))})
-        if (data1[2] === null){
-            break
-        }
-        response.url = url
-        test = false
-        response.reviews = []
-        for (jj in data1[2]){
-            if (data1[2][jj].at(27) < rangeD){
-                test = true
-                break
-            }
-            response.reviews.push(data1[2][jj])
-        }
-        responses.push(response)
-        if (i===1){
-            break
-        }
-        i++
-    }
-    return responses
-    """.split(
-        "\n"
-    )
-
-    def clean_text(txt):
-        try:
-            txt = str(txt)
-        except:
-            pass
-        if txt:
-            txt = (
-                txt.replace("\n", "")
-                .replace("\r", "")
-                .replace("|", "")
-                .replace("\t", "")
-            )
-            return txt
+def go_to_review_page():
 
     try:
-        place = driver.find_element(
+
+        more_reviews_button = WebDriverWait(driver, 5).until(
+            EC.element_to_be_clickable(
+                (
+                    By.XPATH,
+                    '//button[contains(@jsaction,"moreReviews")]',
+                )
+            )
+        )
+
+        # action = ActionChains(driver)
+        # action.move_to_element(to_element=more_reviews_button)
+        # action.perform()
+        more_reviews_button2 = WebDriverWait(driver, 5).until(
+            EC.element_to_be_clickable(
+                (
+                    By.XPATH,
+                    '//button[contains(@jsaction,"moreReviews")]',
+                )
+            )
+        )
+
+        print(">>> Moving to review page")
+        click(more_reviews_button, driver)
+        return True
+    except:
+        print("Reviews not found")
+        return False
+
+
+def clean_text(txt):
+    try:
+        txt = str(txt)
+    except:
+        pass
+    if txt:
+        txt = txt.replace("\n", "").replace("\r", "").replace("|", "").replace("\t", "")
+        return txt
+
+
+def get_review_stars(driver):
+    # get percetage review stars
+
+    try:
+        WebDriverWait(driver, 15).until(
+            EC.presence_of_element_located(
+                (
+                    By.CSS_SELECTOR,
+                    "#QA0Szd > div > div > div.w6VYqd > div.bJzME.tTVLSc > div > div.e07Vkf.kA9KIf > div > div > div.m6QErb.DxyBCb.kA9KIf.dS8AEf > div.PPCwl > div > div.jANrlb > div.fontDisplayLarge",
+                )
+            )
+        )
+        total_star = driver.find_element(
+            by=By.CSS_SELECTOR,
+            value="#QA0Szd > div > div > div.w6VYqd > div.bJzME.tTVLSc > div > div.e07Vkf.kA9KIf > div > div > div.m6QErb.DxyBCb.kA9KIf.dS8AEf > div.PPCwl > div > div.jANrlb > div.fontDisplayLarge",
+        ).text
+        total_reviews = int(
+            driver.execute_script(
+                """ return document.querySelector("#QA0Szd > div > div > div.w6VYqd > div.bJzME.tTVLSc > div > div.e07Vkf.kA9KIf > div > div > div.m6QErb.DxyBCb.kA9KIf.dS8AEf > div.PPCwl > div > div.jANrlb > div.fontBodySmall").textContent"""
+            )
+            .split(" ")[0]
+            .replace(",", "")
+        )
+        star_5_percent = (
+            int(
+                driver.execute_script(
+                    """ return document.querySelector("#QA0Szd > div > div > div.w6VYqd > div.bJzME.tTVLSc > div > div.e07Vkf.kA9KIf > div > div > div.m6QErb.DxyBCb.kA9KIf.dS8AEf > div.PPCwl > div > div.ExlQHd > table > tbody > tr:nth-child(1)").ariaLabel"""
+                )
+                .split(" ")[2]
+                .replace(",", "")
+            )
+            / total_reviews
+        )
+        star_4_percent = (
+            int(
+                driver.execute_script(
+                    """ return document.querySelector("#QA0Szd > div > div > div.w6VYqd > div.bJzME.tTVLSc > div > div.e07Vkf.kA9KIf > div > div > div.m6QErb.DxyBCb.kA9KIf.dS8AEf > div.PPCwl > div > div.ExlQHd > table > tbody > tr:nth-child(2)").ariaLabel"""
+                )
+                .split(" ")[2]
+                .replace(",", "")
+            )
+            / total_reviews
+        )
+        star_3_percent = (
+            int(
+                driver.execute_script(
+                    """ return document.querySelector("#QA0Szd > div > div > div.w6VYqd > div.bJzME.tTVLSc > div > div.e07Vkf.kA9KIf > div > div > div.m6QErb.DxyBCb.kA9KIf.dS8AEf > div.PPCwl > div > div.ExlQHd > table > tbody > tr:nth-child(3)").ariaLabel"""
+                )
+                .split(" ")[2]
+                .replace(",", "")
+            )
+            / total_reviews
+        )
+        star_2_percent = (
+            int(
+                driver.execute_script(
+                    """ return document.querySelector("#QA0Szd > div > div > div.w6VYqd > div.bJzME.tTVLSc > div > div.e07Vkf.kA9KIf > div > div > div.m6QErb.DxyBCb.kA9KIf.dS8AEf > div.PPCwl > div > div.ExlQHd > table > tbody > tr:nth-child(4)").ariaLabel"""
+                )
+                .split(" ")[2]
+                .replace(",", "")
+            )
+            / total_reviews
+        )
+        star_1_percent = (
+            int(
+                driver.execute_script(
+                    """ return document.querySelector("#QA0Szd > div > div > div.w6VYqd > div.bJzME.tTVLSc > div > div.e07Vkf.kA9KIf > div > div > div.m6QErb.DxyBCb.kA9KIf.dS8AEf > div.PPCwl > div > div.ExlQHd > table > tbody > tr:nth-child(5)").ariaLabel"""
+                )
+                .split(" ")[2]
+                .replace(",", "")
+            )
+            / total_reviews
+        )
+
+        star_5_percent = round(star_5_percent * 100, ndigits=2)
+        star_4_percent = round(star_4_percent * 100, ndigits=2)
+        star_3_percent = round(star_3_percent * 100, ndigits=2)
+        star_2_percent = round(star_2_percent * 100, ndigits=2)
+        star_1_percent = round(star_1_percent * 100, ndigits=2)
+
+        return {
+            "star_5_percent": star_5_percent,
+            "star_4_percent": star_4_percent,
+            "star_3_percent": star_3_percent,
+            "star_2_percent": star_2_percent,
+            "star_1_percent": star_1_percent,
+            "total_star": total_star,
+            "total_reviews": total_reviews,
+        }
+    except Exception as e:
+        print(f"Error: {e} in Extracting review counts")
+        return {}
+
+
+def get_reviews(query):
+
+    map_search(query)
+    go_to_place_page()
+    review_page = go_to_review_page()
+
+    if not review_page:
+        return []
+
+    url = driver.current_url
+    # Get name of place extracted from screen
+    try:
+        extracted_place = driver.find_element(
             by=By.XPATH, value="//h1[contains(@class,'fontHeadlineLarge')]/span"
         ).text
         if not place:
-            place = clean_text(url.split("place/")[1].split("/")[0].replace("+", " "))
+            extracted_place = clean_text(
+                url.split("place/")[1].split("/")[0].replace("+", " ")
+            )
     except:
-        place = clean_text(url.split("place/")[1].split("/")[0].replace("+", " "))
-    while True:
+        extracted_place = clean_text(
+            url.split("place/")[1].split("/")[0].replace("+", " ")
+        )
+
+    review_star_count = get_review_stars(driver)
+    star_5_percent = review_star_count.get("star_5_percent", None)
+    star_4_percent = review_star_count.get("star_4_percent", None)
+    star_3_percent = review_star_count.get("star_3_percent", None)
+    star_2_percent = review_star_count.get("star_2_percent", None)
+    star_1_percent = review_star_count.get("star_1_percent", None)
+    total_star = review_star_count.get("total_star", None)
+    total_reviews = review_star_count.get("total_reviews", None)
+    try:
+        driver.execute_script(
+            """b = document.querySelector("#QA0Szd > div > div > div.w6VYqd > div.bJzME.tTVLSc > div > div.e07Vkf.kA9KIf > div > div > div.m6QErb.DxyBCb.kA9KIf.dS8AEf")
+        b.scrollBy(0,10000)
+        """
+        )
+
+        time.sleep(2)  # wait for backend to recieve review api response
+
+        backend_api_url = None
+        while not backend_api_url:
+            backend_responses = driver.requests
+            for backend_response in backend_responses:
+                if "listentitiesreviews" in backend_response.url:
+                    backend_api_url = backend_response.url
+                    break
+
+        print(">>> Extracted API URL")
+
         try:
-            total_star = float(
-                driver.execute_script(
-                    """return document.querySelector("#QA0Szd > div > div > div.w6VYqd > div.bJzME.tTVLSc > div > div.e07Vkf.kA9KIf > div > div > div.m6QErb.DxyBCb.kA9KIf.dS8AEf > div.PPCwl > div > div.jANrlb > div.fontDisplayLarge").innerText"""
-                )
-            )
-            total_reviews = int(
-                driver.execute_script(
-                    """ return document.querySelector("#QA0Szd > div > div > div.w6VYqd > div.bJzME.tTVLSc > div > div.e07Vkf.kA9KIf > div > div > div.m6QErb.DxyBCb.kA9KIf.dS8AEf > div.PPCwl > div > div.jANrlb > div.fontBodySmall").textContent"""
-                )
-                .split(" ")[0]
-                .replace(",", "")
-            )
-            star_5_percent = (
-                int(
-                    driver.execute_script(
-                        """ return document.querySelector("#QA0Szd > div > div > div.w6VYqd > div.bJzME.tTVLSc > div > div.e07Vkf.kA9KIf > div > div > div.m6QErb.DxyBCb.kA9KIf.dS8AEf > div.PPCwl > div > div.ExlQHd > table > tbody > tr:nth-child(1)").ariaLabel"""
-                    )
-                    .split(" ")[2]
-                    .replace(",", "")
-                )
-                / total_reviews
-            )
-            star_4_percent = (
-                int(
-                    driver.execute_script(
-                        """ return document.querySelector("#QA0Szd > div > div > div.w6VYqd > div.bJzME.tTVLSc > div > div.e07Vkf.kA9KIf > div > div > div.m6QErb.DxyBCb.kA9KIf.dS8AEf > div.PPCwl > div > div.ExlQHd > table > tbody > tr:nth-child(2)").ariaLabel"""
-                    )
-                    .split(" ")[2]
-                    .replace(",", "")
-                )
-                / total_reviews
-            )
-            star_3_percent = (
-                int(
-                    driver.execute_script(
-                        """ return document.querySelector("#QA0Szd > div > div > div.w6VYqd > div.bJzME.tTVLSc > div > div.e07Vkf.kA9KIf > div > div > div.m6QErb.DxyBCb.kA9KIf.dS8AEf > div.PPCwl > div > div.ExlQHd > table > tbody > tr:nth-child(3)").ariaLabel"""
-                    )
-                    .split(" ")[2]
-                    .replace(",", "")
-                )
-                / total_reviews
-            )
-            star_2_percent = (
-                int(
-                    driver.execute_script(
-                        """ return document.querySelector("#QA0Szd > div > div > div.w6VYqd > div.bJzME.tTVLSc > div > div.e07Vkf.kA9KIf > div > div > div.m6QErb.DxyBCb.kA9KIf.dS8AEf > div.PPCwl > div > div.ExlQHd > table > tbody > tr:nth-child(4)").ariaLabel"""
-                    )
-                    .split(" ")[2]
-                    .replace(",", "")
-                )
-                / total_reviews
-            )
-            star_1_percent = (
-                int(
-                    driver.execute_script(
-                        """ return document.querySelector("#QA0Szd > div > div > div.w6VYqd > div.bJzME.tTVLSc > div > div.e07Vkf.kA9KIf > div > div > div.m6QErb.DxyBCb.kA9KIf.dS8AEf > div.PPCwl > div > div.ExlQHd > table > tbody > tr:nth-child(5)").ariaLabel"""
-                    )
-                    .split(" ")[2]
-                    .replace(",", "")
-                )
-                / total_reviews
-            )
-            break
+            review_api_responses = parse_reviews(backend_api_url, NUM_PAGES)
         except Exception as e:
-            continue
+            review_api_responses = []
+            print(f"ERROR: {e}")
 
-    star_5_percent = round(star_5_percent * 100, ndigits=2)
-    star_4_percent = round(star_4_percent * 100, ndigits=2)
-    star_3_percent = round(star_3_percent * 100, ndigits=2)
-    star_2_percent = round(star_2_percent * 100, ndigits=2)
-    star_1_percent = round(star_1_percent * 100, ndigits=2)
-    print(
-        star_5_percent, star_4_percent, star_3_percent, star_2_percent, star_1_percent
-    )
+        # saving review api response
+        file_name = f"reviews_response/{query}.json"
+        with open(file_name, "w", encoding="utf-8") as response_file:
+            json.dump(review_api_responses, response_file, indent=4)
 
-    driver.execute_script(
-        """b = document.querySelector("#QA0Szd > div > div > div.w6VYqd > div.bJzME.tTVLSc > div > div.e07Vkf.kA9KIf > div > div > div.m6QErb.DxyBCb.kA9KIf.dS8AEf")
-    b.scrollBy(0,10000)
-    """
-    )
-    time.sleep(3)
+        reviews = []
+        for review_page in review_api_responses:
+            api_url = review_page.get("url")
+            for review in review_page.get("reviews", []):
+                name = clean_text(review[0][1])
+                comment = clean_text(review[3])
 
-    data_url = None
-    while not data_url:
-        req = driver.requests
-        for i in req:
-            if "listentitiesreviews" in i.url:
-                data_url = i.url.replace("!3e1!", "!3e2!")
-                break
-    print("Extracting reviews")
-
-    def dater(data_url1):
-        script[0] = script[0].format(data_url)
-        script[1] = script[1].format(str(noofdays))
-        try:
-            responses = driver.execute_script("\n".join(script))
-
-        except Exception as e:
-            print(e)
-            return [0], e
-        ret = []
-        n = 0
-        file_name = f"response/{tag}.txt"
-        with open(file_name, "a", encoding="utf-8") as response_file:
-            json.dump(responses, response_file, indent=4)
-
-            for i, response in enumerate(responses):
-                uurl = response.get("url")
-                for i in response.get("reviews"):
-                    name = clean_text(i[0][1])
-                    comment = clean_text(i[3])
-
-                    owner_response = clean_text(
-                        "-" if not (i[9] and i[9][1]) else i[9][1]
+                owner_response = clean_text(
+                    None if not (review[9] and review[9][1]) else review[9][1]
+                )
+                owner_response_time = clean_text(
+                    None
+                    if not (review[9] and review[9][3])
+                    else datetime.datetime.fromtimestamp(
+                        review[9][3] / 1000.0
+                    ).strftime("%Y-%m-%d %H:%M:%S")
+                )
+                star = clean_text(review[4])
+                review_time = clean_text(
+                    datetime.datetime.fromtimestamp(review[27] / 1000.0).strftime(
+                        "%Y-%m-%d %H:%M:%S"
                     )
-                    owner_response_time = clean_text(
-                        "-"
-                        if not (i[9] and i[9][3])
-                        else datetime.datetime.fromtimestamp(i[9][3] / 1000.0).strftime(
-                            "%Y-%m-%d %H:%M:%S"
-                        )
-                    )
-                    idc = clean_text(i[10])
-                    star = clean_text(i[4])
-                    extraction_date = clean_text(
-                        datetime.datetime.today().strftime("%Y-%m-%d")
-                    )
-                    time = clean_text(
-                        datetime.datetime.fromtimestamp(i[27] / 1000.0).strftime(
-                            "%Y-%m-%d %H:%M:%S"
-                        )
-                        if i[-5]
-                        else ""
-                    )
-                    ret.append(
-                        [
-                            tag,
-                            url,
-                            extraction_date,
-                            place,
-                            total_reviews,
-                            total_star,
-                            star_1_percent,
-                            star_2_percent,
-                            star_3_percent,
-                            star_4_percent,
-                            star_5_percent,
-                            idc,
-                            name,
-                            star,
-                            time,
-                            comment,
-                            owner_response,
-                            owner_response_time,
-                            uurl,
-                        ]
-                    )  # parsing and storing
-
-        return ret, None
-
-    res, error = dater(data_url)
-    return (res, url) if (len(res) == 0 or res[0] != 0) else f"{tag}|{url}|{error}"
+                    if review[-5]
+                    else None
+                )
+                reviews.append(
+                    [
+                        query,
+                        url,
+                        extracted_place,
+                        total_reviews,
+                        total_star,
+                        star_1_percent,
+                        star_2_percent,
+                        star_3_percent,
+                        star_4_percent,
+                        star_5_percent,
+                        name,
+                        star,
+                        comment,
+                        review_time,
+                        owner_response,
+                        owner_response_time,
+                        api_url,
+                    ]
+                )
+        return reviews
+    except Exception as e:
+        print(e)
+        return []
 
 
-def save_reviews(result):
-
+def save_reviews(reviews, filename):
+    print("Saving Reviews")
     columns = [
-        "Vendor Name",
-        "Url",
-        "Extraction Date",
-        "Place",
-        "Total reviews",
-        "Total star",
-        "1 star %",
-        "2 star %",
-        "3 star %",
-        "4 star %",
-        "5 star %",
-        "Post Id",
+        "query",
+        "Review URL",
+        "Extracted Vendor",
+        "Number of Reviews",
+        "Average Stars",
+        "Total 2 Star Reviews Percentage",
+        "Total 3 Star Reviews Percentage",
+        "Total 4 Star Reviews Percentage",
+        "Total 5 Star Reviews Percentage",
+        "Total 1 Star Reviews Percentage",
         "Name",
-        "Star",
-        "Timestamp",
-        "Review",
-        "Owner response",
-        "Owner response time",
-        "Source",
+        "Number of Stars",
+        "Comment",
+        "Time",
+        "Owner Response",
+        "Owner Response Time",
+        "API URL",
     ]
-    result = pd.DataFrame(result[0], columns=columns)
-    result.to_csv(
-        "data2.csv", mode="a", index=None, header=not os.path.exists("data.csv")
-    )
+    df = pd.DataFrame(reviews, columns=columns)
+    df.to_csv(filename, mode="a", index=None, header=not os.path.exists(filename))
 
 
 if __name__ == "__main__":
@@ -369,23 +362,6 @@ if __name__ == "__main__":
     driver = webdriver.Chrome(
         service=service,
     )
-    driver.get("https://www.google.com/maps/@4.8882198,6.9960933,15z")
 
-    df = pd.read_csv("not_scraped.csv")
-
-    for i, query in enumerate(df["Vendor Name"].unique()[295:]):
-        print("=======" + str(i) + " " + query + "========")
-
-        try:
-            map_search(query)
-            is_review = parse_search()
-            url = driver.current_url
-
-            result = getReviews(url, query, is_review)
-            save_reviews(result)
-            # driver.get("https://www.google.com/maps/@4.8882198,6.9960933,15z")
-        except:
-            with open("error.txt", "a") as error:
-                error.write(query)
-                error.write("\n")
-            continue
+    reviews = get_reviews("Adams Photography")
+    save_reviews(reviews, "revies.csv")

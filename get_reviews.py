@@ -28,7 +28,14 @@ def get_reviews(url):
 
 
 
-print(get_reviews('https://www.google.com/maps/preview/review/listentitiesreviews?authuser=0&hl=en&gl=uk&pb=!1m2!1y5221390517247707075!2y12871855046015027610!2m2!1i0!2i10!3e1!4m5!3b1!4b1!5b1!6b1!7b1!5m2!1s49XaYs_ND9SBhbIP7Ky4gAo!7e81'))
+
+
+
+reviews = get_reviews('https://www.google.com/maps/preview/review/listentitiesreviews?authuser=0&hl=en&gl=uk&pb=!1m2!1y5221390517247707075!2y12871855046015027610!2m2!1i0!2i10!3e1!4m5!3b1!4b1!5b1!6b1!7b1!5m2!1s49XaYs_ND9SBhbIP7Ky4gAo!7e81')
+
+
+with open('response.json', 'a') as file:
+    json.dump(reviews, file)
 
         
 
