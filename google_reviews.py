@@ -15,7 +15,7 @@ import datetime
 import pandas as pd
 import requests
 
-DRIVER_EXECUTABLE_PATH = "./utils/chromedriver"
+DRIVER_EXECUTABLE_PATH = "./utils/chromedriver.exe"
 os.makedirs("reviews_response", exist_ok=True)
 
 
@@ -110,7 +110,7 @@ def go_to_review_page():
 def quick_search_to_review():
     review_page = False
     counter = 0
-    while not review_page and counter <= 3:
+    while not review_page and counter < 2:
         counter += 1
 
         try:
@@ -209,6 +209,10 @@ def get_review_stars(driver):
 def get_reviews(query):
 
     map_search(query)
+
+    # delete previous backend request to fecth new ones
+    del driver.requests
+
     review_page = quick_search_to_review()
 
     if not review_page:
@@ -358,6 +362,7 @@ if __name__ == "__main__":
 
     vendors_df = pd.read_csv("Vendors to scrape - Sheet1.csv")
 
-    for place in vendors_df["Vendor Name"].unique():
+    for i, place in enumerate(vendors_df["Vendor Name"].unique()[2:5]):
+        print(f"=============== {i} ==================")
         reviews = get_reviews(place)
-        save_reviews(reviews, "review.csv")
+        save_reviews(reviews, "map_review.csv")
