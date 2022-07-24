@@ -15,7 +15,7 @@ import datetime
 import pandas as pd
 import requests
 
-DRIVER_EXECUTABLE_PATH = "./utils/chromedriver.exe"
+DRIVER_EXECUTABLE_PATH = "./utils/chromedriver"
 os.makedirs("reviews_response", exist_ok=True)
 
 
@@ -56,7 +56,7 @@ def map_search(query):
     query_encoded = "+".join(query.split())
 
     driver.get(f"https://www.google.com/maps/place/{query_encoded}")
-    search_button = WebDriverWait(driver, 10).until(
+    search_button = WebDriverWait(driver, 15).until(
         EC.element_to_be_clickable((By.XPATH, '//button[@id="searchbox-searchbutton"]'))
     )
     click(search_button, driver)
@@ -110,7 +110,7 @@ def go_to_review_page():
 def quick_search_to_review():
     review_page = False
     counter = 0
-    while not review_page and counter < 2:
+    while not review_page and counter <= 1:
         counter += 1
 
         try:
@@ -145,6 +145,7 @@ def get_review_stars(driver):
                 )
             )
         )
+        print("Extracting Stars Count")
         total_star = driver.find_element(
             by=By.CSS_SELECTOR,
             value="#QA0Szd > div > div > div.w6VYqd > div.bJzME.tTVLSc > div > div.e07Vkf.kA9KIf > div > div > div.m6QErb.DxyBCb.kA9KIf.dS8AEf > div.PPCwl > div > div.jANrlb > div.fontDisplayLarge",
@@ -248,22 +249,26 @@ def get_reviews(query):
         num_pages = 2
 
     try:
-        driver.execute_script(
-            """b = document.querySelector("#QA0Szd > div > div > div.w6VYqd > div.bJzME.tTVLSc > div > div.e07Vkf.kA9KIf > div > div > div.m6QErb.DxyBCb.kA9KIf.dS8AEf")
-        b.scrollBy(0,10000)
-        """
-        )
+        print(">>> Extracting API URL")
 
         backend_api_url = None
-        while not backend_api_url:
+        count = 0
+        while not backend_api_url and count < 10:
+            count += 1
+            try:
+                driver.execute_script(
+                    """b = document.querySelector("#QA0Szd > div > div > div.w6VYqd > div.bJzME.tTVLSc > div > div.e07Vkf.kA9KIf > div > div > div.m6QErb.DxyBCb.kA9KIf.dS8AEf")
+            b.scrollBy(0,10000)
+            """
+                )
+            except:
+                pass
             backend_responses = driver.requests
             for backend_response in backend_responses:
                 if "listentitiesreviews" in backend_response.url:
                     backend_api_url = backend_response.url
                     break
             time.sleep(0.5)  # wait for backend to recieve review api response
-
-        print(">>> Extracted API URL")
 
         try:
             review_api_responses = parse_reviews(backend_api_url, num_pages) or []
@@ -272,6 +277,7 @@ def get_reviews(query):
             print(f"ERROR: {e}")
 
         # saving review api response
+        query = query.replace("/", "_")
         file_name = f"reviews_response/{query}.json"
         with open(file_name, "w", encoding="utf-8") as response_file:
             json.dump(review_api_responses, response_file, indent=4)
@@ -360,9 +366,13 @@ if __name__ == "__main__":
         service=service,
     )
 
-    vendors_df = pd.read_csv("Vendors to scrape - Sheet1.csv")
+    vendors_df = pd.read_csv("filr.csv")
+    scraped = pd.read_csv("map_review.csv")
 
-    for i, place in enumerate(vendors_df["Vendor Name"].unique()[2:5]):
+    for i, place in enumerate(vendors_df["Vendor Name"].unique()[5:]):
+        if place in list(scraped["query"].unique()):
+            print(f"Skipping duplicate {place}")
+            continue
         print(f"=============== {i} ==================")
         reviews = get_reviews(place)
         save_reviews(reviews, "map_review.csv")
